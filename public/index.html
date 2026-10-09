@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Meals</title>
+  <meta name="theme-color" content="#f6f4ff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#110e1f" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Meals">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="app" id="app"><div class="empty"><div class="big">🍽️</div><p>Loading…</p></div></main>
+
+  <div class="tabbar">
+    <nav>
+      <a class="tab" href="#/" data-tab="today"></a>
+      <a class="tab" href="#/history" data-tab="history"></a>
+      <a class="tab" href="#/goals" data-tab="goals"></a>
+    </nav>
+  </div>
+
+  <dialog class="sheet" id="sheet" aria-label="Meal details"></dialog>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "name": "meal-tracker",
+  "version": "1.0.0",
+  "description": "Text-only meal log with an MCP server so Claude can estimate meals from photos",
+  "scripts": {
+    "dev": "netlify dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scwambach/meal-tracker.git"
+  },
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/scwambach/meal-tracker/issues"
+  },
+  "homepage": "https://github.com/scwambach/meal-tracker#readme",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^6.0.2",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}
