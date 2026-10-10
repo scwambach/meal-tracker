@@ -126,7 +126,7 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); }
 .tabbar nav { max-width: 520px; margin: 0 auto; display: flex; justify-content: space-around; }
-.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 88px; padding: 4px 12px;
+.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 72px; padding: 4px 8px;
   border-radius: 14px; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-decoration: none; }
 .tab[aria-current="page"] { color: var(--brand); }
 .tab[aria-current="page"] svg { stroke-width: 2.6; }
@@ -308,3 +308,19 @@ dialog.sheet[open] { animation: up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1); }
   .ring-wrap { width: 124px; height: 124px; }
   .ring-num { font-size: 1.7rem; }
 }
+
+/* ---- Workouts ---- */
+.hero-burn { background: linear-gradient(135deg, #12c46b, #0fb5a8 55%, #2f9bff); box-shadow: 0 10px 30px rgb(15 181 168 / 0.28); }
+.burn-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 16px; }
+.burn-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.burn-track { width: 100%; max-width: 30px; height: 56px; border-radius: 9px; background: rgb(255 255 255 / 0.22);
+  display: flex; align-items: flex-end; overflow: hidden; }
+.burn-track span { display: block; width: 100%; background: #fff; border-radius: 9px 9px 0 0; }
+.burn-col small { font-size: 0.72rem; font-weight: 800; opacity: 0.85; width: 22px; height: 22px; display: grid; place-items: center; }
+.burn-col.sel small { background: #fff; color: #0b8f84; border-radius: 99px; opacity: 1; }
+.burn-col.future .burn-track { opacity: 0.45; }
+.meal-kcal.burn { color: #0fa968; }
+@media (prefers-color-scheme: dark) { .meal-kcal.burn { color: #3ee29a; } }
+.fine-note { display: flex; gap: 8px; align-items: flex-start; margin: 10px 4px 0; font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.fine-note svg { width: 17px; height: 17px; color: var(--carbs); }
+.section-title.day-head { display: flex; justify-content: space-between; }

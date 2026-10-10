@@ -14,6 +14,8 @@ const ICONS = {
   note: '<path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
   week: '<path d="M4 20V10M9 20V6M14 20v-8M19 20V4"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
 };
 const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -25,6 +27,26 @@ const MEAL_TYPES = {
   drink: { emoji: "🥤", label: "Drink" },
 };
 const typeOf = (m) => MEAL_TYPES[m.meal_type] ?? { emoji: "🍽️", label: m.meal_type };
+
+const WORKOUT_TYPES = {
+  run: { emoji: "🏃", label: "Run", bg: "#ffd0c2" },
+  walk: { emoji: "🚶", label: "Walk", bg: "#c9f7d4" },
+  hike: { emoji: "🥾", label: "Hike", bg: "#e8dcc4" },
+  cycle: { emoji: "🚴", label: "Ride", bg: "#c7ecff" },
+  swim: { emoji: "🏊", label: "Swim", bg: "#c7ecff" },
+  strength: { emoji: "🏋️", label: "Strength", bg: "#e5dbff" },
+  hiit: { emoji: "⚡", label: "HIIT", bg: "#ffe7a3" },
+  yoga: { emoji: "🧘", label: "Yoga", bg: "#ffd6ec" },
+  sports: { emoji: "⛹️", label: "Sports", bg: "#ffe7a3" },
+  cardio: { emoji: "❤️", label: "Cardio", bg: "#ffd6ec" },
+  other: { emoji: "💪", label: "Workout", bg: "#e5dbff" },
+};
+const workoutType = (w) => WORKOUT_TYPES[w.type] ?? WORKOUT_TYPES.other;
+const INTENSITY = { light: "Light", moderate: "Moderate", hard: "Hard" };
+const fmtDuration = (min) => {
+  const m = r(min);
+  return m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
+};
 
 const MACROS = [
   { key: "protein_g", label: "Protein", icon: "protein", color: "var(--protein)" },
@@ -80,6 +102,7 @@ function weekDays(date) {
 
 // ---- data ----
 let meals = [];
+let workouts = [];
 let profile = null;
 let targets = null;
 let options = null;
@@ -102,13 +125,15 @@ const sumTotals = (list) =>
 
 async function load() {
   try {
-    const [mealsRes, profileRes] = await Promise.all([
+    const [mealsRes, profileRes, workoutsRes] = await Promise.all([
       fetch("/api/meals", { cache: "no-store" }),
       fetch("/api/profile", { cache: "no-store" }),
+      fetch("/api/workouts", { cache: "no-store" }),
     ]);
     if (!mealsRes.ok) throw new Error(`HTTP ${mealsRes.status}`);
     meals = (await mealsRes.json()).meals;
     if (profileRes.ok) ({ profile, targets, options } = await profileRes.json());
+    if (workoutsRes.ok) workouts = (await workoutsRes.json()).workouts;
     loaded = true;
     render();
   } catch (e) {
@@ -251,6 +276,104 @@ function dayView(date) {
         ? `<div class="meals">${list.map(mealCard).join("")}</div>`
         : emptyState(isToday ? "📸" : "🍽️", isToday ? "Nothing yet. Send Claude a photo of your meal." : "Nothing logged this day.")
     }`;
+}
+
+// ---- Workouts ----
+// Burned calories are shown for reference only; they never change the food goals.
+function workoutCard(w) {
+  const t = workoutType(w);
+  const sub = [fmtDuration(w.duration_min), INTENSITY[w.intensity], w.distance].filter(Boolean).join(" · ");
+  return `<button class="meal" data-workout="${esc(w.id)}">
+    <div class="tile" style="background:${t.bg}">${t.emoji}</div>
+    <div class="meal-body">
+      <div class="meal-title">${esc(w.title)}</div>
+      <div class="meal-sub">${esc(sub)}${w.confidence === "low" ? ' · <span class="flag">rough guess</span>' : ""}</div>
+    </div>
+    <div class="meal-kcal burn num">${n(w.calories_burned)}<small>kcal</small></div>
+  </button>`;
+}
+
+function workoutsView() {
+  const week = weekDays(today());
+  const byDate = new Map();
+  for (const w of workouts) (byDate.get(w.date) ?? byDate.set(w.date, []).get(w.date)).push(w);
+  const burned = week.map((d) => (byDate.get(d) ?? []).reduce((a, w) => a + w.calories_burned, 0));
+  const weekList = workouts.filter((w) => week.includes(w.date));
+  const weekTotal = burned.reduce((a, b) => a + b, 0);
+  const weekMin = weekList.reduce((a, w) => a + w.duration_min, 0);
+  const max = Math.max(1, ...burned);
+  const days = [...byDate].sort(([a], [b]) => b.localeCompare(a));
+
+  app.innerHTML = `
+    <header class="topbar"><h1>Workouts</h1></header>
+    <section class="hero hero-burn">
+      <div class="hero-label">${icon("activity")} Burned this week</div>
+      <div class="hero-kcal num">${n(weekTotal)}<small>kcal</small></div>
+      <div class="hero-sub">${weekList.length} workout${weekList.length === 1 ? "" : "s"} · ${fmtDuration(weekMin)}</div>
+      <div class="burn-bars">${week
+        .map(
+          (d, i) => `<div class="burn-col ${d === today() ? "sel" : ""} ${d > today() ? "future" : ""}">
+            <div class="burn-track"><span style="height:${(burned[i] / max) * 100}%"></span></div>
+            <small>${parseDay(d).toLocaleDateString(undefined, { weekday: "narrow" })}</small>
+          </div>`,
+        )
+        .join("")}</div>
+    </section>
+    <p class="fine-note">${icon("bulb")}<span>Just for reference. Workouts don't change your daily calorie goal.</span></p>
+    ${
+      days.length
+        ? days
+            .map(([date, list]) => {
+              const total = list.reduce((a, w) => a + w.calories_burned, 0);
+              return `<div class="section-title day-head"><span>${esc(dayLabel(date))}</span><span class="num">${n(total)} kcal</span></div>
+                <div class="meals">${list.map(workoutCard).join("")}</div>`;
+            })
+            .join("")
+        : emptyState("💪", "No workouts yet. Tell Claude what you did and it'll estimate the burn.")
+    }`;
+}
+
+function openWorkout(id) {
+  const w = workouts.find((x) => x.id === id);
+  if (!w) return;
+  const t = workoutType(w);
+  const conf = { low: "Rough guess", medium: "Good estimate", high: "Confident" }[w.confidence] ?? w.confidence;
+  const perMin = w.duration_min ? r(w.calories_burned / w.duration_min) : 0;
+  const stat = (ic, value, label) =>
+    `<div class="chip"><div class="dot" style="background:var(--fiber)">${icon(ic)}</div><div><b class="num">${esc(value)}</b><span>${label}</span></div></div>`;
+  sheet.innerHTML = `<div class="sheet-inner">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <div class="tile" style="background:${t.bg}">${t.emoji}</div>
+      <div>
+        <h2>${esc(w.title)}</h2>
+        <div class="meal-sub">${esc([t.label, dayLabel(w.date), fmtTime(w.time)].filter(Boolean).join(" · "))}</div>
+      </div>
+      <button class="sheet-close" data-close aria-label="Close">${icon("close")}</button>
+    </div>
+
+    <section class="hero hero-burn" style="margin-top:18px">
+      <div class="hero-label">${icon("activity")} Burned <span class="badge ${esc(w.confidence)}" style="margin-left:auto">${esc(conf)}</span></div>
+      <div class="hero-kcal num">${n(w.calories_burned)}<small>kcal</small></div>
+      <div class="hero-sub">About ${perMin} kcal a minute</div>
+    </section>
+    <div class="chips">
+      ${stat("clock", fmtDuration(w.duration_min), "Duration")}
+      ${stat("flame", INTENSITY[w.intensity] ?? w.intensity, "Intensity")}
+      ${stat("activity", w.distance || "—", "Distance")}
+    </div>
+
+    ${
+      w.assumptions?.length
+        ? `<div class="section-title">Notes from Claude</div>
+           <div class="callout"><h3 style="color:var(--carbs)">${icon("bulb")} Assumptions</h3>
+           <ul>${w.assumptions.map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>`
+        : ""
+    }
+    ${w.notes ? `<div class="callout" ${w.assumptions?.length ? "" : 'style="margin-top:22px"'}><h3 style="color:var(--fat)">${icon("note")} Note</h3><p>${esc(w.notes)}</p></div>` : ""}
+  </div>`;
+  sheet.showModal();
+  sheet.querySelector(".sheet-inner").scrollTop = 0;
 }
 
 // ---- History ----
@@ -549,6 +672,7 @@ function route() {
   const h = location.hash;
   if (h === "#/history") return { view: "history" };
   if (h === "#/goals") return { view: "goals" };
+  if (h === "#/workouts") return { view: "workouts" };
   const m = h.match(/^#\/d\/(\d{4}-\d{2}-\d{2})$/);
   return { view: "day", date: m && m[1] < today() ? m[1] : today() };
 }
@@ -558,6 +682,7 @@ function render() {
   const { view, date } = route();
   if (view === "history") historyView();
   else if (view === "goals") goalsView();
+  else if (view === "workouts") workoutsView();
   else dayView(date);
   const activeTab = view === "day" ? "today" : view;
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -573,6 +698,8 @@ document.addEventListener("click", (e) => {
   if (go && !go.disabled) return goDay(go.dataset.go);
   const meal = e.target.closest(".meal[data-id]");
   if (meal) return openMeal(meal.dataset.id);
+  const workout = e.target.closest(".meal[data-workout]");
+  if (workout) return openWorkout(workout.dataset.workout);
 });
 
 // Swipe left/right on the day view to change days.
@@ -595,13 +722,18 @@ window.addEventListener("hashchange", () => {
   render();
   window.scrollTo(0, 0);
 });
-// Meals get added from Claude, so refresh when the app comes back to the foreground
+// Meals and workouts get added from Claude, so refresh when the app comes back to the foreground
 // (but don't wipe a half-filled goals form).
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && route().view !== "goals") load();
 });
 
-const TABS = { today: ["today", "Today"], history: ["history", "History"], goals: ["target", "Goals"] };
+const TABS = {
+  today: ["today", "Today"],
+  workouts: ["activity", "Workouts"],
+  history: ["history", "History"],
+  goals: ["target", "Goals"],
+};
 document.querySelectorAll(".tab").forEach((tab) => {
   const [ic, label] = TABS[tab.dataset.tab];
   tab.innerHTML = `${icon(ic)}${label}`;
