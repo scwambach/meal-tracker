@@ -8,9 +8,11 @@ Hosted on Netlify. Data lives in [Netlify Blobs](https://docs.netlify.com/build/
 
 - **Today**: a ring showing calories left today, macro progress, and a week card with calories left this week, plus a daily budget for the rest of the week. Swipe left or right to change days.
 - **Workouts**: calories burned this week, a bar per day, and every workout Claude has logged, with the duration, intensity and assumptions behind each estimate. Burned calories are for reference only and never change your calorie goals.
+- **Weight**: your current weight, how much it's changed, and a line chart over 1 month, 3 months, 1 year or all time (drag or tap the chart to read any day). Log weigh-ins from here (decimals are fine) or by telling Claude. The latest weigh-in automatically updates the weight on your Goals, so your targets follow your weight.
 - **History**: every day you've logged, with how far it was over or under your goal.
 - **Goals**: enter your sex, age, height, weight, activity level and how fast you want to lose. Your daily and weekly calorie and macro targets update live as you type.
 - Tap any meal to see its item-by-item breakdown and the assumptions Claude made.
+- Meals, workouts and weigh-ins can be deleted from the app. You're asked to confirm first, and asked once per device for your site passcode.
 
 On iPhone, open the site in Safari and tap Share → **Add to Home Screen** so it runs full-screen like an app. On Android, use Chrome's menu → **Install app**.
 
@@ -24,10 +26,11 @@ Your resting burn is estimated with the Mifflin–St Jeor equation, then multipl
 - `netlify/functions/meals.mts` is the API.
   - `GET /api/meals?from=YYYY-MM-DD&to=YYYY-MM-DD` and `GET /api/meals/:id` are public.
   - `POST /api/meals`, `PATCH /api/meals/:id` and `DELETE /api/meals/:id` require `Authorization: Bearer $MEAL_API_TOKEN`.
-  - `/api/workouts` and `/api/workouts/:id` work the same way, for workouts.
+  - `/api/workouts` and `/api/weights` (plus `/:id`) work the same way, for workouts and weigh-ins.
+  - Writes also accept `SITE_PASSCODE`, which is how the website deletes items and logs weigh-ins.
   - `GET /api/profile` returns your profile and computed targets. `PUT /api/profile` accepts either `MEAL_API_TOKEN` or `SITE_PASSCODE`.
 - `netlify/lib/meals.ts` holds the meal schema and storage. Totals are computed on the server from each meal's items.
-- `netlify/lib/workouts.ts` holds the workout schema.
+- `netlify/lib/workouts.ts` and `netlify/lib/weights.ts` hold the workout and weigh-in schemas. Weigh-ins also keep the profile's weight in sync.
 - `netlify/lib/records.ts` and `netlify/lib/crud.ts` hold the date-keyed storage and REST handler that meals and workouts share.
 - `netlify/lib/goals.ts` holds the profile schema and goal math.
 

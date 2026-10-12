@@ -22,12 +22,15 @@
     <nav>
       <a class="tab" href="#/" data-tab="today"></a>
       <a class="tab" href="#/workouts" data-tab="workouts"></a>
+      <a class="tab" href="#/weight" data-tab="weight"></a>
       <a class="tab" href="#/history" data-tab="history"></a>
       <a class="tab" href="#/goals" data-tab="goals"></a>
     </nav>
   </div>
 
-  <dialog class="sheet" id="sheet" aria-label="Meal details"></dialog>
+  <dialog class="sheet" id="sheet" aria-label="Details"></dialog>
+  <dialog class="modal" id="modal"></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

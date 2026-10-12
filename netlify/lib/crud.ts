@@ -12,7 +12,7 @@ type Ops<In, Out> = {
 
 /**
  * REST handler for a dated collection at /api/<plural> and /api/<plural>/:id.
- * Reads are public; writes need MEAL_API_TOKEN.
+ * Reads are public; writes need MEAL_API_TOKEN (the MCP server) or SITE_PASSCODE (the website).
  */
 export function crudHandler<In, Out>(
   plural: string,
@@ -20,7 +20,8 @@ export function crudHandler<In, Out>(
   ops: Ops<In, Out>,
 ) {
   return async (req: Request, context: Context) => {
-    const id = context.params.id;
+    // Some Netlify CLI versions don't populate params locally, so fall back to the path itself.
+    const id = context.params?.id ?? new URL(req.url).pathname.split("/")[3] ?? undefined;
 
     if (req.method === "GET") {
       if (id) {
@@ -33,7 +34,7 @@ export function crudHandler<In, Out>(
       return json({ [plural]: await ops.list(from, to) });
     }
 
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    if (!authorized(req, { allowPasscode: true })) return json({ error: "unauthorized" }, 401);
 
     if (req.method === "POST" && !id) {
       const parsed = schemas.input.safeParse(await readBody(req));

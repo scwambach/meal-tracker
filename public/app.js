@@ -16,6 +16,10 @@ const ICONS = {
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  scale: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9a5 5 0 0 1 7 0"/><path d="M12 9.5l1.2-1.7"/>',
+  trash: '<path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
 };
 const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -103,6 +107,7 @@ function weekDays(date) {
 // ---- data ----
 let meals = [];
 let workouts = [];
+let weights = [];
 let profile = null;
 let targets = null;
 let options = null;
@@ -125,21 +130,134 @@ const sumTotals = (list) =>
 
 async function load() {
   try {
-    const [mealsRes, profileRes, workoutsRes] = await Promise.all([
+    const [mealsRes, profileRes, workoutsRes, weightsRes] = await Promise.all([
       fetch("/api/meals", { cache: "no-store" }),
       fetch("/api/profile", { cache: "no-store" }),
       fetch("/api/workouts", { cache: "no-store" }),
+      fetch("/api/weights", { cache: "no-store" }),
     ]);
     if (!mealsRes.ok) throw new Error(`HTTP ${mealsRes.status}`);
     meals = (await mealsRes.json()).meals;
     if (profileRes.ok) ({ profile, targets, options } = await profileRes.json());
     if (workoutsRes.ok) workouts = (await workoutsRes.json()).workouts;
+    if (weightsRes.ok) weights = (await weightsRes.json()).weights;
     loaded = true;
     render();
   } catch (e) {
     if (!loaded) app.innerHTML = emptyState("😵", `Couldn't load meals (${esc(e.message)}).`);
   }
 }
+
+// ---- units ----
+const LB_PER_KG = 1 / 0.45359237;
+const imperial = () => (profile?.units ?? "imperial") !== "metric";
+const weightUnit = () => (imperial() ? "lb" : "kg");
+/** kg -> number in the viewer's unit, to one decimal. */
+const toUnit = (kg) => Math.round((imperial() ? kg * LB_PER_KG : kg) * 10) / 10;
+const fromUnit = (v) => (imperial() ? v / LB_PER_KG : v);
+const fmtWeight = (kg) => `${toUnit(kg).toFixed(1)} ${weightUnit()}`;
+
+// ---- modal dialogs (confirm, passcode) ----
+// Cancel is type="button" so pressing Enter submits the primary action instead of cancelling.
+const modal = document.getElementById("modal");
+modal.addEventListener("click", (e) => {
+  if (e.target.closest("[data-cancel]") || e.target === modal) modal.close("cancel");
+});
+
+function confirmDialog({ title, body, confirm = "Delete" }) {
+  return new Promise((resolve) => {
+    modal.innerHTML = `<form method="dialog" class="modal-inner">
+      <div class="modal-icon">${icon("trash")}</div>
+      <h2>${esc(title)}</h2>
+      <p>${esc(body)}</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-cancel>Cancel</button>
+        <button value="ok" class="btn-danger">${esc(confirm)}</button>
+      </div>
+    </form>`;
+    modal.onclose = () => resolve(modal.returnValue === "ok");
+    modal.returnValue = "";
+    modal.showModal();
+    modal.querySelector(".btn-secondary").focus();
+  });
+}
+
+function passcodeDialog(message = "Enter your site passcode. You'll only be asked once on this device.") {
+  return new Promise((resolve) => {
+    modal.innerHTML = `<form method="dialog" class="modal-inner">
+      <div class="modal-icon key">${icon("target")}</div>
+      <h2>Passcode</h2>
+      <p>${esc(message)}</p>
+      <input class="modal-input" name="code" type="password" autocomplete="current-password" placeholder="••••">
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-cancel>Cancel</button>
+        <button value="ok" class="btn-primary">Continue</button>
+      </div>
+    </form>`;
+    const input = modal.querySelector("input");
+    modal.onclose = () => resolve(modal.returnValue === "ok" && input.value ? input.value : null);
+    modal.returnValue = "";
+    modal.showModal();
+    input.focus();
+  });
+}
+
+/** fetch() with the site passcode, asking for it (again) when needed. Returns null if cancelled. */
+async function authedFetch(url, options = {}) {
+  let code = store.get("passcode") || (await passcodeDialog());
+  for (let attempt = 0; code && attempt < 2; attempt++) {
+    const res = await fetch(url, {
+      ...options,
+      headers: { "content-type": "application/json", ...options.headers, authorization: `Bearer ${code}` },
+    });
+    if (res.status !== 401) {
+      if (res.ok) store.set("passcode", code);
+      return res;
+    }
+    store.set("passcode", "");
+    code = await passcodeDialog("That passcode didn't work. Try again.");
+  }
+  return null;
+}
+
+let toastTimer;
+function toast(message, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent = message;
+  el.className = `toast show ${isError ? "err" : ""}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.className = "toast"), 2600);
+}
+
+const COLLECTIONS = {
+  meals: { label: "meal", get: () => meals, set: (v) => (meals = v) },
+  workouts: { label: "workout", get: () => workouts, set: (v) => (workouts = v) },
+  weights: { label: "weigh-in", get: () => weights, set: (v) => (weights = v) },
+};
+
+async function deleteRecord(kind, id) {
+  const c = COLLECTIONS[kind];
+  const record = c.get().find((x) => x.id === id);
+  if (!record) return;
+  const name = record.title ?? `${fmtWeight(record.weight_kg)} on ${dayLabel(record.date)}`;
+  const ok = await confirmDialog({
+    title: `Delete this ${c.label}?`,
+    body: `“${name}” will be removed for good. This can't be undone.`,
+  });
+  if (!ok) return;
+  const res = await authedFetch(`/api/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res) return;
+  if (!res.ok && res.status !== 404) return toast(`Couldn't delete (HTTP ${res.status}).`, true);
+  c.set(c.get().filter((x) => x.id !== id));
+  if (sheet.open) sheet.close();
+  toast(`Deleted ${c.label}`);
+  // Deleting a weigh-in can change the profile weight (and so the targets).
+  if (kind === "weights") await load();
+  else render();
+}
+
+const deleteButton = (kind, id) =>
+  `<button class="btn-delete" data-delete="${kind}" data-id="${esc(id)}">${icon("trash")} Delete ${COLLECTIONS[kind].label}</button>`;
 
 // ---- shared bits ----
 const app = document.getElementById("app");
@@ -371,10 +489,226 @@ function openWorkout(id) {
         : ""
     }
     ${w.notes ? `<div class="callout" ${w.assumptions?.length ? "" : 'style="margin-top:22px"'}><h3 style="color:var(--fat)">${icon("note")} Note</h3><p>${esc(w.notes)}</p></div>` : ""}
+    ${deleteButton("workouts", w.id)}
   </div>`;
   sheet.showModal();
   sheet.querySelector(".sheet-inner").scrollTop = 0;
 }
+
+// ---- Weight ----
+const RANGES = { "1m": ["1M", 30], "3m": ["3M", 91], "1y": ["1Y", 365], all: ["All", Infinity] };
+let weightRange = store.get("weightRange") || "3m";
+
+/** One point per day (the latest weigh-in that day), oldest first. */
+function dailyWeights() {
+  const byDate = new Map();
+  for (const w of [...weights].reverse()) byDate.set(w.date, w); // list is newest first
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const shortDate = (d) => parseDay(d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+function changeBadge(deltaKg, label) {
+  const d = toUnit(Math.abs(deltaKg));
+  if (Math.abs(deltaKg) < 0.02) return `<span class="delta">± 0 ${weightUnit()} ${esc(label)}</span>`;
+  const dir = deltaKg < 0 ? "down" : "up";
+  return `<span class="delta">${icon(dir)}${d.toFixed(1)} ${weightUnit()} ${esc(label)}</span>`;
+}
+
+function weightView() {
+  const pts = dailyWeights();
+  const latest = pts.at(-1);
+  const first = pts[0];
+  const monthAgo = shiftDay(today(), -30);
+  const base30 = [...pts].reverse().find((p) => p.date <= monthAgo) ?? first;
+  const unit = weightUnit();
+
+  app.innerHTML = `
+    <header class="topbar"><h1>Weight</h1></header>
+    ${
+      latest
+        ? `<section class="hero hero-weight">
+            <div class="hero-label">${icon("scale")} Current weight</div>
+            <div class="hero-kcal num">${toUnit(latest.weight_kg).toFixed(1)}<small>${unit}</small></div>
+            <div class="hero-deltas">
+              ${pts.length > 1 ? changeBadge(latest.weight_kg - first.weight_kg, `since ${shortDate(first.date)}`) : ""}
+              ${pts.length > 1 && base30 !== first ? changeBadge(latest.weight_kg - base30.weight_kg, "in 30 days") : ""}
+            </div>
+          </section>
+          <section class="card chart-card">
+            <div class="chart-head">
+              <div class="readout" id="readout" aria-live="polite"></div>
+              ${seg("range", weightRange, Object.entries(RANGES).map(([k, [label]]) => [k, label]))}
+            </div>
+            <div class="chart" id="wchart"></div>
+          </section>`
+        : ""
+    }
+
+    <form class="card log-weight" id="log-weight" novalidate>
+      <div class="log-title">${icon("scale")} Log a weigh-in</div>
+      <div class="log-row">
+        <label class="field"><span>Weight</span><div class="pair">
+          <input name="weight" type="number" inputmode="decimal" step="any" min="1"
+            placeholder="${latest ? toUnit(latest.weight_kg).toFixed(1) : imperial() ? "185.5" : "84.2"}" required><em>${unit}</em></div></label>
+        <label class="field"><span>Date</span><input name="date" type="date" value="${today()}" max="${today()}"></label>
+      </div>
+      <button class="save" type="submit">${icon("check")} Save weigh-in</button>
+    </form>
+
+    <div class="section-title">${weights.length ? `${weights.length} weigh-in${weights.length === 1 ? "" : "s"}` : "Weigh-ins"}</div>
+    ${
+      weights.length
+        ? `<div class="weigh-list card">${weights
+            .map((w, i) => {
+              const prev = weights[i + 1];
+              const diff = prev ? toUnit(w.weight_kg) - toUnit(prev.weight_kg) : null;
+              return `<div class="weigh-row">
+                <div class="when"><b>${esc(dayLabel(w.date))}</b>${w.note ? `<span>${esc(w.note)}</span>` : ""}</div>
+                <div class="right">
+                  <div class="w num">${toUnit(w.weight_kg).toFixed(1)} <small>${unit}</small></div>
+                  ${diff !== null ? `<div class="wdiff num">${diff > 0 ? "+" : diff < 0 ? "−" : "±"}${Math.abs(diff).toFixed(1)}</div>` : ""}
+                </div>
+                <button class="row-delete" data-delete="weights" data-id="${esc(w.id)}" aria-label="Delete weigh-in from ${esc(dayLabel(w.date))}">${icon("trash")}</button>
+              </div>`;
+            })
+            .join("")}</div>`
+        : emptyState("⚖️", "No weigh-ins yet. Log one above, or tell Claude your weight.")
+    }`;
+
+  if (latest) drawWeightChart();
+  const form = document.getElementById("log-weight");
+  form.addEventListener("submit", saveWeight);
+  app.querySelectorAll('input[name="range"]').forEach((el) =>
+    el.addEventListener("change", () => {
+      weightRange = el.value;
+      store.set("weightRange", weightRange);
+      drawWeightChart();
+    }),
+  );
+}
+
+function drawWeightChart() {
+  const el = document.getElementById("wchart");
+  const readout = document.getElementById("readout");
+  if (!el) return;
+  const days = RANGES[weightRange]?.[1] ?? 91;
+  const cutoff = days === Infinity ? "" : shiftDay(today(), -days);
+  const all = dailyWeights();
+  let pts = all.filter((p) => p.date >= cutoff);
+  if (!pts.length) pts = all.slice(-1);
+
+  const unit = weightUnit();
+  const vals = pts.map((p) => toUnit(p.weight_kg));
+  const W = Math.max(240, el.clientWidth);
+  const H = 190;
+  const pad = { l: 40, r: 10, t: 12, b: 24 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+
+  // y domain: data range padded, at least 2 units tall, on whole numbers
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  const span = Math.max(hi - lo, 2);
+  lo = Math.floor(lo - span * 0.15);
+  hi = Math.ceil(hi + span * 0.15);
+  const ticks = [lo, Math.round((lo + hi) / 2), hi];
+
+  const t0 = parseDay(pts[0].date).getTime();
+  const t1 = parseDay(pts.at(-1).date).getTime();
+  const x = (p) => pad.l + (t1 === t0 ? iw / 2 : ((parseDay(p.date).getTime() - t0) / (t1 - t0)) * iw);
+  const y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * ih;
+  const xy = pts.map((p, i) => [x(p), y(vals[i])]);
+
+  const line = xy.map(([a, b], i) => `${i ? "L" : "M"}${a.toFixed(1)},${b.toFixed(1)}`).join("");
+  const area = pts.length > 1 ? `${line}L${xy.at(-1)[0].toFixed(1)},${pad.t + ih}L${xy[0][0].toFixed(1)},${pad.t + ih}Z` : "";
+  const showDots = pts.length <= 40;
+  const xLabels = pts.length > 1 ? [[pad.l, pts[0].date, "start"], [W - pad.r, pts.at(-1).date, "end"]] : [[xy[0][0], pts[0].date, "middle"]];
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img"
+      aria-label="Weight over time, ${vals[0]} to ${vals.at(-1)} ${unit}">
+    ${ticks
+      .map(
+        (t) => `<line class="grid" x1="${pad.l}" x2="${W - pad.r}" y1="${y(t)}" y2="${y(t)}"/>
+        <text class="axis" x="${pad.l - 8}" y="${y(t) + 4}" text-anchor="end">${t}</text>`,
+      )
+      .join("")}
+    ${xLabels.map(([lx, d, anchor]) => `<text class="axis" x="${lx}" y="${H - 6}" text-anchor="${anchor}">${esc(shortDate(d))}</text>`).join("")}
+    ${area ? `<path class="w-area" d="${area}"/>` : ""}
+    ${pts.length > 1 ? `<path class="w-line" d="${line}"/>` : ""}
+    ${xy
+      .map(([a, b], i) => (showDots || i === xy.length - 1 ? `<circle class="w-dot" cx="${a}" cy="${b}" r="4"/>` : ""))
+      .join("")}
+    <line class="crosshair" id="xhair" y1="${pad.t}" y2="${pad.t + ih}" visibility="hidden"/>
+    <circle class="w-dot hover" id="xdot" r="6" visibility="hidden"/>
+    <rect class="hit" x="${pad.l - 10}" y="0" width="${iw + 20}" height="${H}"/>
+  </svg>
+  ${pts.length === 1 ? `<p class="chart-note">Log more weigh-ins to see your trend.</p>` : ""}`;
+
+  const svg = el.querySelector("svg");
+  const xhair = svg.querySelector("#xhair");
+  const xdot = svg.querySelector("#xdot");
+
+  const show = (i, active) => {
+    const p = pts[i];
+    const fromStart = vals[i] - vals[0];
+    readout.innerHTML = `<b class="num">${vals[i].toFixed(1)}</b> <small>${unit}</small>
+      <span>${esc(dayLabel(p.date))}${i > 0 ? ` · ${fromStart > 0 ? "+" : fromStart < 0 ? "−" : "±"}${Math.abs(fromStart).toFixed(1)} vs ${esc(shortDate(pts[0].date))}` : ""}</span>`;
+    for (const [elx, vis] of [[xhair, active], [xdot, active]]) elx.setAttribute("visibility", vis ? "visible" : "hidden");
+    if (active) {
+      xhair.setAttribute("x1", xy[i][0]);
+      xhair.setAttribute("x2", xy[i][0]);
+      xdot.setAttribute("cx", xy[i][0]);
+      xdot.setAttribute("cy", xy[i][1]);
+    }
+  };
+  const nearest = (evt) => {
+    const box = svg.getBoundingClientRect();
+    const px = ((evt.clientX - box.left) / box.width) * W;
+    let best = 0;
+    for (let i = 1; i < xy.length; i++) if (Math.abs(xy[i][0] - px) < Math.abs(xy[best][0] - px)) best = i;
+    return best;
+  };
+  svg.addEventListener("pointermove", (e) => show(nearest(e), true));
+  svg.addEventListener("pointerdown", (e) => show(nearest(e), true));
+  svg.addEventListener("pointerleave", () => show(pts.length - 1, false));
+  show(pts.length - 1, false);
+}
+
+async function saveWeight(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const f = new FormData(form);
+  const value = parseFloat(String(f.get("weight")).replace(",", "."));
+  const date = f.get("date") || today();
+  const kg = fromUnit(value);
+  if (!(kg >= 30 && kg <= 350)) return toast(`Enter a weight in ${weightUnit()}, like ${imperial() ? "185.4" : "84.2"}.`, true);
+  const btn = form.querySelector(".save");
+  btn.disabled = true;
+  try {
+    const now = new Date();
+    const res = await authedFetch("/api/weights", {
+      method: "POST",
+      body: JSON.stringify({
+        date,
+        weight_kg: kg,
+        ...(date === today() && { time: `${pad(now.getHours())}:${pad(now.getMinutes())}` }),
+      }),
+    });
+    if (!res) return;
+    if (!res.ok) return toast(`Couldn't save (HTTP ${res.status}).`, true);
+    toast(`Logged ${value.toFixed(1)} ${weightUnit()}`);
+    await load(); // also picks up the profile weight, which follows the latest weigh-in
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => route().view === "weight" && drawWeightChart(), 150);
+});
 
 // ---- History ----
 function historyView() {
@@ -445,7 +779,7 @@ function readDraft(form, units = new FormData(form).get("units")) {
     sex: f.get("sex"),
     age: parseInt(f.get("age"), 10),
     height_cm: Math.round(height_cm * 10) / 10,
-    weight_kg: Math.round(weight_kg * 10) / 10,
+    weight_kg: Math.round(weight_kg * 1000) / 1000,
     activity: f.get("activity"),
     pace: f.get("pace"),
     week_start: f.get("week_start"),
@@ -478,7 +812,7 @@ function goalsView() {
   const totalIn = p.height_cm ? p.height_cm / 2.54 : null;
   const ft = totalIn ? Math.floor(Math.round(totalIn) / 12) : "";
   const inch = totalIn ? Math.round(totalIn) % 12 : "";
-  const lb = p.weight_kg ? Math.round(p.weight_kg / 0.45359237) : "";
+  const lb = p.weight_kg ? Math.round((p.weight_kg / 0.45359237) * 10) / 10 : "";
   const unit = imperial ? "lb" : "kg";
   const paceAmt = (lb) => (imperial ? `${lb} lb` : `${Math.round(lb * 0.4536 * 100) / 100} kg`);
   const paceLabels = options?.pace ?? {};
@@ -502,13 +836,14 @@ function goalsView() {
                    <input name="ft" type="number" inputmode="numeric" value="${esc(ft)}" placeholder="5"><em>ft</em>
                    <input name="in" type="number" inputmode="numeric" value="${esc(inch)}" placeholder="10"><em>in</em></div></label>
                  <label class="field"><span>Weight</span><div class="pair">
-                   <input name="lb" type="number" inputmode="decimal" value="${esc(lb)}" placeholder="180"><em>lb</em></div></label>`
+                   <input name="lb" type="number" inputmode="decimal" step="any" value="${esc(lb)}" placeholder="180.5"><em>lb</em></div></label>`
               : `<label class="field"><span>Height</span><div class="pair">
-                   <input name="cm" type="number" inputmode="decimal" value="${esc(p.height_cm)}" placeholder="178"><em>cm</em></div></label>
+                   <input name="cm" type="number" inputmode="decimal" step="any" value="${esc(p.height_cm)}" placeholder="178"><em>cm</em></div></label>
                  <label class="field"><span>Weight</span><div class="pair">
-                   <input name="kg" type="number" inputmode="decimal" value="${esc(p.weight_kg)}" placeholder="82"><em>kg</em></div></label>`
+                   <input name="kg" type="number" inputmode="decimal" step="any" value="${esc(p.weight_kg ? Math.round(p.weight_kg * 10) / 10 : "")}" placeholder="82.4"><em>kg</em></div></label>`
           }
         </div>
+        ${weights.length ? `<p class="fine-note">${icon("scale")}<span>Weight updates automatically from your latest weigh-in.</span></p>` : ""}
       </div>
 
       <div class="section-title">How active are you?</div>
@@ -647,6 +982,7 @@ function openMeal(id) {
         : ""
     }
     ${m.notes ? `<div class="callout" ${m.assumptions?.length ? "" : 'style="margin-top:22px"'}><h3 style="color:var(--fat)">${icon("note")} Note</h3><p>${esc(m.notes)}</p></div>` : ""}
+    ${deleteButton("meals", m.id)}
   </div>`;
   sheet.showModal();
   sheet.querySelector(".sheet-inner").scrollTop = 0;
@@ -673,6 +1009,7 @@ function route() {
   if (h === "#/history") return { view: "history" };
   if (h === "#/goals") return { view: "goals" };
   if (h === "#/workouts") return { view: "workouts" };
+  if (h === "#/weight") return { view: "weight" };
   const m = h.match(/^#\/d\/(\d{4}-\d{2}-\d{2})$/);
   return { view: "day", date: m && m[1] < today() ? m[1] : today() };
 }
@@ -683,6 +1020,7 @@ function render() {
   if (view === "history") historyView();
   else if (view === "goals") goalsView();
   else if (view === "workouts") workoutsView();
+  else if (view === "weight") weightView();
   else dayView(date);
   const activeTab = view === "day" ? "today" : view;
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -694,6 +1032,8 @@ function render() {
 const goDay = (date) => (location.hash = date >= today() ? "#/" : `#/d/${date}`);
 
 document.addEventListener("click", (e) => {
+  const del = e.target.closest("[data-delete]");
+  if (del) return deleteRecord(del.dataset.delete, del.dataset.id);
   const go = e.target.closest("[data-go]");
   if (go && !go.disabled) return goDay(go.dataset.go);
   const meal = e.target.closest(".meal[data-id]");
@@ -725,12 +1065,13 @@ window.addEventListener("hashchange", () => {
 // Meals and workouts get added from Claude, so refresh when the app comes back to the foreground
 // (but don't wipe a half-filled goals form).
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && route().view !== "goals") load();
+  if (document.visibilityState === "visible" && route().view !== "goals" && !modal.open) load();
 });
 
 const TABS = {
   today: ["today", "Today"],
   workouts: ["activity", "Workouts"],
+  weight: ["scale", "Weight"],
   history: ["history", "History"],
   goals: ["target", "Goals"],
 };
