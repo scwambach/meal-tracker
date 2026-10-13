@@ -349,19 +349,27 @@ function ringStat(label, eaten, goal, extra = "") {
 function weekBand(wk) {
   return `<div class="week-band">
     <div class="ring-stat-label">${icon("week")} This week</div>
-    <div class="week-band-num num">${n(wk.total)}<small>of ${n(targets.weekly_calories)}</small></div>
+    <div class="week-band-num num">${n(wk.total)}<small>of ${n(wk.goal)}</small></div>
+    ${wk.earned ? `<div class="week-band-sub num">${icon("activity")} +${n(wk.earned)} from workouts</div>` : ""}
   </div>`;
 }
+
+// Share of workout burn that is added back to the weekly allotment. Burn estimates run high, so keep it small.
+const EAT_BACK = 0.25;
 
 function weekStats(date, days) {
   const week = weekDays(date);
   const eaten = week.map((d) => sumTotals(days.get(d) ?? []).calories);
   const total = eaten.reduce((a, b) => a + b, 0);
+  // Workouts up to and including this day add a share of their burn to the week.
+  const burned = workouts.filter((w) => week.includes(w.date) && w.date <= date).reduce((a, w) => a + w.calories_burned, 0);
+  const earned = Math.round(burned * EAT_BACK);
+  const goal = (targets?.weekly_calories ?? 0) + earned;
   // The day's budget if the rest of the week (this day included) is to land on the weekly target.
   const remainingDays = week.filter((d) => d >= date).length;
   const eatenBefore = week.reduce((a, d, i) => a + (d < date ? eaten[i] : 0), 0);
-  const adjusted = targets ? Math.max(0, (targets.weekly_calories - eatenBefore) / remainingDays) : 0;
-  return { week, eaten, total, adjusted };
+  const adjusted = targets ? Math.max(0, (goal - eatenBefore) / remainingDays) : 0;
+  return { week, eaten, total, goal, earned, adjusted };
 }
 
 function weekCard(date, wk) {
@@ -408,7 +416,7 @@ function dayView(date) {
 }
 
 // ---- Workouts ----
-// Burned calories are shown for reference only; they never change the food goals.
+// A quarter of burned calories (EAT_BACK) is added to the weekly food allotment; the daily goal never changes.
 function workoutCard(w) {
   const t = workoutType(w);
   const sub = [fmtDuration(w.duration_min), INTENSITY[w.intensity], w.distance].filter(Boolean).join(" · ");
@@ -448,7 +456,7 @@ function workoutsView() {
         )
         .join("")}</div>
     </section>
-    <p class="fine-note">${icon("bulb")}<span>Just for reference. Workouts don't change your daily calorie goal.</span></p>
+    <p class="fine-note">${icon("bulb")}<span>A quarter of what you burn is added to your weekly calories. Your daily goal stays the same.</span></p>
     ${
       days.length
         ? days

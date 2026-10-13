@@ -216,6 +216,8 @@ dialog.sheet[open] { animation: up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1); }
   margin-top: 6px; padding-top: 14px; border-top: 1px solid rgb(255 255 255 / 0.25); }
 .week-band-num { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
 .week-band-num small { font-size: 0.85rem; font-weight: 700; opacity: 0.9; margin-left: 6px; letter-spacing: 0; }
+.week-band-sub { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; font-weight: 700; opacity: 0.88; }
+.week-band-sub svg { width: 14px; height: 14px; }
 .ring-sub { font-size: 0.85rem; font-weight: 700; opacity: 0.88; }
 .ring-sub b { font-weight: 800; opacity: 1; }
 .hero-sub { font-weight: 700; opacity: 0.9; font-size: 0.9rem; }

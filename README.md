@@ -6,8 +6,8 @@ Hosted on Netlify. Data lives in [Netlify Blobs](https://docs.netlify.com/build/
 
 ## What it does
 
-- **Today**: a ring showing calories left today, macro progress, and a week card with calories left this week, plus a daily budget for the rest of the week. Swipe left or right to change days.
-- **Workouts**: calories burned this week, a bar per day, and every workout Claude has logged, with the duration, intensity and assumptions behind each estimate. Burned calories are for reference only and never change your calorie goals.
+- **Today**: two rings, one for calories left against your daily goal and an **Adjusted** one that spreads what's left of the weekly allotment over the remaining days (with how much you've banked). Below them, what you've eaten this week, then macro progress and a bar per day. Swipe left or right to change days.
+- **Workouts**: calories burned this week, a bar per day, and every workout Claude has logged, with the duration, intensity and assumptions behind each estimate. A quarter of the calories you burn is added to that week's calorie allotment (burn estimates run high, so only a small share counts). Your daily goal stays the same.
 - **Weight**: your current weight, how much it's changed, and a line chart over 1 month, 3 months, 1 year or all time (drag or tap the chart to read any day). Log weigh-ins from here (decimals are fine) or by telling Claude. The latest weigh-in automatically updates the weight on your Goals, so your targets follow your weight.
 - **History**: every day you've logged, with how far it was over or under your goal.
 - **Goals**: enter your sex, age, height, weight, activity level and how fast you want to lose. Your daily and weekly calorie and macro targets update live as you type.
