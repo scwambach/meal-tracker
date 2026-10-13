@@ -347,13 +347,9 @@ function ringStat(label, eaten, goal, extra = "") {
 }
 
 function weekBand(wk) {
-  const left = targets.weekly_calories - wk.total;
   return `<div class="week-band">
-    <div class="ring-stat-label">${icon("week")} ${wk.isCurrent ? "This week" : "That week"}</div>
-    <div class="week-band-row">
-      <div class="week-band-num num">${n(Math.abs(left))}<small>${left < 0 ? "over" : "left"}</small></div>
-      <div class="ring-sub num"><b>${n(wk.total)}</b> of ${n(targets.weekly_calories)}</div>
-    </div>
+    <div class="ring-stat-label">${icon("week")} This week</div>
+    <div class="week-band-num num">${n(wk.total)}<small>of ${n(targets.weekly_calories)}</small></div>
   </div>`;
 }
 
@@ -361,12 +357,11 @@ function weekStats(date, days) {
   const week = weekDays(date);
   const eaten = week.map((d) => sumTotals(days.get(d) ?? []).calories);
   const total = eaten.reduce((a, b) => a + b, 0);
-  const isCurrent = week.includes(today());
   // The day's budget if the rest of the week (this day included) is to land on the weekly target.
   const remainingDays = week.filter((d) => d >= date).length;
   const eatenBefore = week.reduce((a, d, i) => a + (d < date ? eaten[i] : 0), 0);
   const adjusted = targets ? Math.max(0, (targets.weekly_calories - eatenBefore) / remainingDays) : 0;
-  return { week, eaten, total, isCurrent, adjusted };
+  return { week, eaten, total, adjusted };
 }
 
 function weekCard(date, wk) {
