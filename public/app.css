@@ -204,10 +204,21 @@ dialog.sheet[open] { animation: up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1); }
 .ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .ring-num { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
 .ring-label { font-size: 0.85rem; font-weight: 700; opacity: 0.9; margin-top: 2px; }
-.hero-stats { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; }
-.hero-stats span { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; opacity: 0.88; }
-.hero-stats span svg { width: 16px; height: 16px; }
-.hero-stats b { display: block; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.hero-rings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 18px 16px; }
+.ring-stat { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.ring-stat-label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; opacity: 0.92; }
+.ring-stat-label svg { width: 16px; height: 16px; }
+.ring-stat .ring-wrap { width: 100%; max-width: 148px; height: auto; aspect-ratio: 1; }
+.hero-rings .ring-num { font-size: 1.7rem; }
+.banked { font-size: 0.78rem; font-weight: 800; padding: 3px 9px; border-radius: 99px; background: rgb(255 255 255 / 0.22); }
+.banked.under { background: #ffe14d; color: #3a2a00; }
+.week-band { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin-top: 6px; padding-top: 14px; border-top: 1px solid rgb(255 255 255 / 0.25); }
+.week-band-row { display: flex; align-items: baseline; gap: 12px; }
+.week-band-num { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.week-band-num small { font-size: 0.85rem; font-weight: 700; opacity: 0.9; margin-left: 4px; letter-spacing: 0; }
+.ring-sub { font-size: 0.85rem; font-weight: 700; opacity: 0.88; }
+.ring-sub b { font-weight: 800; opacity: 1; }
 .hero-sub { font-weight: 700; opacity: 0.9; font-size: 0.9rem; }
 
 .chip em { font-style: normal; font-size: 0.8rem; color: var(--muted); font-weight: 700; }
@@ -222,15 +233,7 @@ dialog.sheet[open] { animation: up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1); }
 .cta b { color: var(--fg); font-size: 1rem; }
 
 .week { margin-top: 10px; }
-.week-head { display: flex; align-items: center; gap: 12px; }
-.week-icon { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; color: #fff;
-  background: linear-gradient(135deg, #2f9bff, #7b5cff); flex: none; }
-.week-label { font-size: 0.78rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.week-left { font-weight: 700; color: var(--muted); }
-.week-left b { font-size: 1.5rem; font-weight: 800; color: var(--fg); letter-spacing: -0.02em; }
-.week-left b.over { color: var(--kcal); }
-.week-left span { font-size: 0.85rem; }
-.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 14px; }
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
 .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .bar-col:disabled { cursor: default; }
 .bar-track { position: relative; width: 100%; max-width: 34px; height: 72px; border-radius: 10px; background: var(--bg);
@@ -241,10 +244,6 @@ dialog.sheet[open] { animation: up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1); }
 .bar-col small { font-size: 0.72rem; font-weight: 800; color: var(--muted); }
 .bar-col.sel small { color: #fff; background: var(--brand); border-radius: 99px; width: 22px; height: 22px; display: grid; place-items: center; }
 .bar-col.future .bar-track { opacity: 0.5; }
-.week-hint { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; padding: 10px 12px; border-radius: 14px;
-  background: var(--bg); font-size: 0.85rem; color: var(--muted); font-weight: 600; }
-.week-hint svg { width: 18px; height: 18px; color: var(--carbs); }
-.week-hint b { color: var(--fg); }
 
 .diff { font-size: 0.75rem; font-weight: 700; color: var(--fiber); }
 .diff.over { color: var(--kcal); }
@@ -307,6 +306,7 @@ dialog.sheet[open] { animation: up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1); }
 @media (max-width: 360px) {
   .ring-wrap { width: 124px; height: 124px; }
   .ring-num { font-size: 1.7rem; }
+  .hero-rings .ring-num { font-size: 1.4rem; }
 }
 
 /* ---- Workouts ---- */

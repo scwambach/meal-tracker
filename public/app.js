@@ -306,7 +306,7 @@ function mealCard(m) {
 }
 
 // ---- Today / day view ----
-function dayHero(t) {
+function dayHero(t, date, wk) {
   if (!targets) {
     return `<section class="hero">
       <div class="hero-label">${icon("flame")} Eaten</div>
@@ -315,46 +315,66 @@ function dayHero(t) {
     </section>
     <a class="cta" href="#/goals">${icon("target")}<span><b>Set your goals</b><br>See how many calories you have left</span>${icon("right")}</a>`;
   }
-  const goal = targets.daily_calories;
-  const left = goal - t.calories;
+  const dayName = date === today() ? "Today" : parseDay(date).toLocaleDateString(undefined, { weekday: "long" });
+  const banked = wk.adjusted - targets.daily_calories;
+  return `<section class="hero hero-rings">
+    ${ringStat(icon("flame") + " " + dayName, t.calories, targets.daily_calories)}
+    ${ringStat(
+      icon("week") + " Adjusted",
+      t.calories,
+      wk.adjusted,
+      `<div class="banked num ${banked < 0 ? "under" : ""}">${banked < 0 ? "−" : "+"}${n(Math.abs(banked))} ${banked < 0 ? "below goal" : "banked"}</div>`,
+    )}
+    ${weekBand(wk)}
+  </section>`;
+}
+
+function ringStat(label, eaten, goal, extra = "") {
+  const left = goal - eaten;
   const over = left < 0;
-  return `<section class="hero hero-ring">
+  return `<div class="ring-stat">
+    <div class="ring-stat-label">${label}</div>
     <div class="ring-wrap">
-      ${ring(t.calories / goal, over)}
+      ${ring(goal > 0 ? eaten / goal : 1, over)}
       <div class="ring-center">
         <div class="ring-num num">${n(Math.abs(left))}</div>
         <div class="ring-label">${over ? "over" : "left"}</div>
       </div>
     </div>
-    <div class="hero-stats">
-      <div><span>${icon("flame")} Eaten</span><b class="num">${n(t.calories)}</b></div>
-      <div><span>${icon("target")} Goal</span><b class="num">${n(goal)}</b></div>
-    </div>
-  </section>`;
+    <div class="ring-sub num"><b>${n(eaten)}</b> of ${n(goal)}</div>
+    ${extra}
+  </div>`;
 }
 
-function weekCard(date, days) {
-  if (!targets) return "";
+function weekBand(wk) {
+  const left = targets.weekly_calories - wk.total;
+  return `<div class="week-band">
+    <div class="ring-stat-label">${icon("week")} ${wk.isCurrent ? "This week" : "That week"}</div>
+    <div class="week-band-row">
+      <div class="week-band-num num">${n(Math.abs(left))}<small>${left < 0 ? "over" : "left"}</small></div>
+      <div class="ring-sub num"><b>${n(wk.total)}</b> of ${n(targets.weekly_calories)}</div>
+    </div>
+  </div>`;
+}
+
+function weekStats(date, days) {
   const week = weekDays(date);
   const eaten = week.map((d) => sumTotals(days.get(d) ?? []).calories);
   const total = eaten.reduce((a, b) => a + b, 0);
-  const left = targets.weekly_calories - total;
   const isCurrent = week.includes(today());
-  const remainingDays = isCurrent ? week.filter((d) => d >= today()).length : 0;
-  const eatenBeforeToday = week.reduce((a, d, i) => a + (d < today() ? eaten[i] : 0), 0);
-  // Budget for each remaining day (today included) if the week is to land on target.
-  const perDay = remainingDays ? (targets.weekly_calories - eatenBeforeToday) / remainingDays : 0;
+  // The day's budget if the rest of the week (this day included) is to land on the weekly target.
+  const remainingDays = week.filter((d) => d >= date).length;
+  const eatenBefore = week.reduce((a, d, i) => a + (d < date ? eaten[i] : 0), 0);
+  const adjusted = targets ? Math.max(0, (targets.weekly_calories - eatenBefore) / remainingDays) : 0;
+  return { week, eaten, total, isCurrent, adjusted };
+}
+
+function weekCard(date, wk) {
+  if (!targets) return "";
+  const { week, eaten } = wk;
   const max = Math.max(targets.daily_calories * 1.25, ...eaten);
 
   return `<section class="card week">
-    <div class="week-head">
-      <div class="week-icon">${icon("week")}</div>
-      <div>
-        <div class="week-label">${isCurrent ? "This week" : "That week"}</div>
-        <div class="week-left num"><b class="${left < 0 ? "over" : ""}">${n(Math.abs(left))}</b> ${left < 0 ? "over" : "left"}
-          <span>of ${n(targets.weekly_calories)}</span></div>
-      </div>
-    </div>
     <div class="bars">${week
       .map((d, i) => {
         const h = (eaten[i] / max) * 100;
@@ -366,11 +386,6 @@ function weekCard(date, days) {
         </button>`;
       })
       .join("")}</div>
-    ${
-      isCurrent && remainingDays > 1
-        ? `<p class="week-hint">${icon("bulb")}<span>About <b class="num">${n(Math.max(0, perDay))}</b> a day for the rest of the week keeps you on track.</span></p>`
-        : ""
-    }
   </section>`;
 }
 
@@ -379,15 +394,16 @@ function dayView(date) {
   const list = days.get(date) ?? [];
   const t = sumTotals(list);
   const isToday = date === today();
+  const wk = weekStats(date, days);
   app.innerHTML = `
     <header class="topbar">
       <button class="icon-btn" data-go="${shiftDay(date, -1)}" aria-label="Previous day">${icon("left")}</button>
       <h1>${esc(dayLabel(date))}</h1>
       <button class="icon-btn" data-go="${shiftDay(date, 1)}" aria-label="Next day" ${isToday ? "disabled" : ""}>${icon("right")}</button>
     </header>
-    ${dayHero(t)}
+    ${dayHero(t, date, wk)}
     <div class="chips">${MACROS.map((m) => chip(m, t[m.key], targets?.[m.key])).join("")}</div>
-    ${weekCard(date, days)}
+    ${weekCard(date, wk)}
     <div class="section-title">${list.length ? `${list.length} meal${list.length === 1 ? "" : "s"}` : "Meals"}</div>
     ${
       list.length
