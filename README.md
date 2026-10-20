@@ -1,6 +1,6 @@
 # Meal Tracker
 
-A phone-first web app that shows what you've eaten, with estimated calories and macros, and how much you have left for the day and the week. Meals are added by Claude through the companion MCP server, [meal-tracker-mcp](https://github.com/scwambach/meal-tracker-mcp), which you self-host.
+A phone-first web app that shows what you've eaten, with estimated calories and macros, and how much you have left for the day and the week. Meals, workouts and weigh-ins are added by Claude through the site's built-in MCP server at `/mcp`, which you add to Claude as a custom connector.
 
 Hosted on Netlify. Data lives in [Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/), so there's no database to set up. No photos are ever stored.
 
@@ -33,13 +33,18 @@ Your resting burn is estimated with the Mifflin–St Jeor equation, then multipl
 - `netlify/lib/workouts.ts` and `netlify/lib/weights.ts` hold the workout and weigh-in schemas. Weigh-ins also keep the profile's weight in sync.
 - `netlify/lib/records.ts` and `netlify/lib/crud.ts` hold the date-keyed storage and REST handler that meals and workouts share.
 - `netlify/lib/goals.ts` holds the profile schema and goal math.
+- `netlify/functions/mcp.mts` is the MCP server Claude connects to, and `netlify/lib/mcp.ts` holds its tools. They read and write storage directly rather than going through the API.
+- `public/budget.js` holds the weekly budget math (including the 25% of workout burn added back), shared by the app and the MCP tools.
 
 ## Deploy
 
 1. Push this repo to GitHub and import it in Netlify (no build settings needed; `netlify.toml` covers them).
 2. In **Site configuration → Environment variables**, set:
-   - `MEAL_API_TOKEN`: a long random string, e.g. `openssl rand -hex 32`. Use the same value in meal-tracker-mcp.
+   - `MEAL_API_TOKEN`: a long random string, e.g. `openssl rand -hex 32`, for writing to the API directly.
    - `SITE_PASSCODE`: a short code you'll type once per device to save your goals.
+   - `MCP_AUTH_TOKEN`: another long random string. The MCP endpoint refuses every request until it's set.
+   - `TIMEZONE`: your IANA time zone, e.g. `America/Chicago`. Netlify runs in UTC, so without this Claude's "today" rolls over at the wrong time.
+3. In Claude, add a custom connector with the URL `https://<your-site>.netlify.app/mcp/<MCP_AUTH_TOKEN>`. Clients that can send headers can instead use `/mcp` with `Authorization: Bearer <MCP_AUTH_TOKEN>`.
 
 ## Local development
 
@@ -49,7 +54,7 @@ printf 'MEAL_API_TOKEN=dev\nSITE_PASSCODE=1234\n' > .env
 npx netlify-cli dev
 ```
 
-The site runs at http://localhost:8888, with Blobs in local sandbox mode.
+The site runs at http://localhost:8888, with Blobs in local sandbox mode. Add `MCP_AUTH_TOKEN=dev` to `.env` to try the MCP server at http://localhost:8888/mcp/dev.
 
 ## Privacy note
 

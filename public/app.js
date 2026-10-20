@@ -1,3 +1,5 @@
+import { weekBudget } from "./budget.js";
+
 const ICONS = {
   flame: '<path d="M12 3c.5 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .2 2 1 3 2.2 3.3C11.2 8.5 11 6 12 3z"/>',
   protein: '<path d="M6.5 7v10M17.5 7v10M3.5 10v4M20.5 10v4M6.5 12h11"/>',
@@ -354,22 +356,19 @@ function weekBand(wk) {
   </div>`;
 }
 
-// Share of workout burn that is added back to the weekly allotment. Burn estimates run high, so keep it small.
-const EAT_BACK = 0.25;
-
 function weekStats(date, days) {
   const week = weekDays(date);
   const eaten = week.map((d) => sumTotals(days.get(d) ?? []).calories);
   const total = eaten.reduce((a, b) => a + b, 0);
   // Workouts up to and including this day add a share of their burn to the week.
   const burned = workouts.filter((w) => week.includes(w.date) && w.date <= date).reduce((a, w) => a + w.calories_burned, 0);
-  const earned = Math.round(burned * EAT_BACK);
-  const goal = (targets?.weekly_calories ?? 0) + earned;
-  // The day's budget if the rest of the week (this day included) is to land on the weekly target.
-  const remainingDays = week.filter((d) => d >= date).length;
-  const eatenBefore = week.reduce((a, d, i) => a + (d < date ? eaten[i] : 0), 0);
-  const adjusted = targets ? Math.max(0, (goal - eatenBefore) / remainingDays) : 0;
-  return { week, eaten, total, goal, earned, adjusted };
+  const { earned, goal, adjusted } = weekBudget({
+    weekly: targets?.weekly_calories ?? 0,
+    burned,
+    eatenBefore: week.reduce((a, d, i) => a + (d < date ? eaten[i] : 0), 0),
+    daysLeft: week.filter((d) => d >= date).length,
+  });
+  return { week, eaten, total, goal, earned, adjusted: targets ? adjusted : 0 };
 }
 
 function weekCard(date, wk) {
@@ -416,7 +415,7 @@ function dayView(date) {
 }
 
 // ---- Workouts ----
-// A quarter of burned calories (EAT_BACK) is added to the weekly food allotment; the daily goal never changes.
+// A quarter of burned calories (EAT_BACK in budget.js) is added to the weekly food allotment; the daily goal never changes.
 function workoutCard(w) {
   const t = workoutType(w);
   const sub = [fmtDuration(w.duration_min), INTENSITY[w.intensity], w.distance].filter(Boolean).join(" · ");

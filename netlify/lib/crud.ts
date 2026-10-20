@@ -2,6 +2,12 @@ import type { Context } from "@netlify/functions";
 import type { z } from "zod";
 import { authorized, json, readBody } from "./http.ts";
 
+/** Only the fields the caller actually sent, so schema defaults don't clobber stored values on a patch. */
+export function sentFields<T>(parsed: Partial<T>, body: unknown): Partial<T> {
+  const sent = new Set(Object.keys((body ?? {}) as object));
+  return Object.fromEntries(Object.entries(parsed).filter(([k]) => sent.has(k))) as Partial<T>;
+}
+
 type Ops<In, Out> = {
   list: (from?: string, to?: string) => Promise<Out[]>;
   get: (id: string) => Promise<Out | null>;
@@ -46,10 +52,7 @@ export function crudHandler<In, Out>(
       const body = await readBody(req);
       const parsed = schemas.patch.safeParse(body);
       if (!parsed.success) return json({ error: parsed.error.issues }, 400);
-      // Only apply fields the caller actually sent, so schema defaults don't clobber stored values.
-      const sent = new Set(Object.keys(body as object));
-      const patch = Object.fromEntries(Object.entries(parsed.data).filter(([k]) => sent.has(k))) as Partial<In>;
-      const record = await ops.update(id, patch);
+      const record = await ops.update(id, sentFields(parsed.data, body));
       return record ? json(record) : json({ error: "not found" }, 404);
     }
 

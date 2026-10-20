@@ -14,7 +14,7 @@ export async function readBody(req: Request): Promise<unknown> {
   }
 }
 
-function matches(given: string, expected: string | undefined): boolean {
+export function matches(given: string, expected: string | undefined): boolean {
   if (!expected) return false;
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
