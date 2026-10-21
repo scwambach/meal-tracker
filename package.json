@@ -16,6 +16,7 @@
   },
   "homepage": "https://github.com/scwambach/meal-tracker#readme",
   "dependencies": {
+    "@anthropic-ai/sdk": "0.132.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@netlify/blobs": "^11.1.4",
     "zod": "^4.6.5"

@@ -1,4 +1,5 @@
 import { weekBudget } from "./budget.js";
+import { initChat } from "./chat.js";
 
 const ICONS = {
   flame: '<path d="M12 3c.5 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .2 2 1 3 2.2 3.3C11.2 8.5 11 6 12 3z"/>',
@@ -22,6 +23,10 @@ const ICONS = {
   trash: '<path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  sparkle: '<path d="M12 3.5l1.8 4.9 4.9 1.8-4.9 1.8L12 16.9l-1.8-4.9-4.9-1.8 4.9-1.8z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
+  camera: '<path d="M4 8.5h3l1.5-2.5h7L17 8.5h3v10H4z"/><circle cx="12" cy="13" r="3.2"/>',
+  send: '<path d="M12 19V6M6.5 11.5L12 6l5.5 5.5"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
 };
 const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -1097,4 +1102,5 @@ document.querySelectorAll(".tab").forEach((tab) => {
   const [ic, label] = TABS[tab.dataset.tab];
   tab.innerHTML = `${icon(ic)}${label}`;
 });
+initChat({ authedFetch, toast, onChanged: () => load(), icon, esc });
 load();

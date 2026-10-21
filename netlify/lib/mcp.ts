@@ -38,9 +38,9 @@ function resolveTimezone(): string {
   }
 }
 
-const TIMEZONE = resolveTimezone();
+export const TIMEZONE = resolveTimezone();
 
-const INSTRUCTIONS = `
+export const INSTRUCTIONS = `
 This server logs meals, workouts and weigh-ins to the user's personal tracker. You are the estimator:
 there is no food or exercise database.
 
@@ -146,7 +146,7 @@ const summarize = (m: Meal) =>
   `${m.title} (${m.meal_type}, ${m.date}${m.time ? " " + m.time : ""}) — ${m.totals.calories} kcal, ` +
   `P ${m.totals.protein_g}g · C ${m.totals.carbs_g}g · F ${m.totals.fat_g}g [id ${m.id}]`;
 
-function nowLocal() {
+export function nowLocal() {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-CA", {
       timeZone: TIMEZONE,

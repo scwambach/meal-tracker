@@ -6,6 +6,7 @@ Hosted on Netlify. Data lives in [Netlify Blobs](https://docs.netlify.com/build/
 
 ## What it does
 
+- **Ask Claude**: the button above the tab bar opens a chat with Claude right in the app. Type what you ate or did, or attach photos of food, labels or workout screens. Claude estimates the calories and macros, asks if something's unclear, and logs it with the same tools the claude.ai connector uses. You can also ask "how much do I have left?" or "that was two slices, not one". Photos are shrunk on your phone before sending and are never stored.
 - **Today**: two rings, one for calories left against your daily goal and an **Adjusted** one that spreads what's left of the weekly allotment over the remaining days (with how much you've banked). Below them, what you've eaten this week, then macro progress and a bar per day. Swipe left or right to change days.
 - **Workouts**: calories burned this week, a bar per day, and every workout Claude has logged, with the duration, intensity and assumptions behind each estimate. A quarter of the calories you burn is added to that week's calorie allotment (burn estimates run high, so only a small share counts). Your daily goal stays the same.
 - **Weight**: your current weight, how much it's changed, and a line chart over 1 month, 3 months, 1 year or all time (drag or tap the chart to read any day). Log weigh-ins from here (decimals are fine) or by telling Claude. The latest weigh-in automatically updates the weight on your Goals, so your targets follow your weight.
@@ -34,6 +35,7 @@ Your resting burn is estimated with the Mifflin–St Jeor equation, then multipl
 - `netlify/lib/records.ts` and `netlify/lib/crud.ts` hold the date-keyed storage and REST handler that meals and workouts share.
 - `netlify/lib/goals.ts` holds the profile schema and goal math.
 - `netlify/functions/mcp.mts` is the MCP server Claude connects to, and `netlify/lib/mcp.ts` holds its tools. They read and write storage directly rather than going through the API.
+- `netlify/functions/chat.mts` (`POST /api/chat`, needs `SITE_PASSCODE`) and `netlify/lib/assistant.ts` power Ask Claude. They call the Claude API (Claude Opus 5.5) with the MCP tools connected in-process, so the app and the connector behave the same. Each request runs at most about 40 seconds of the turn, and the app calls again to continue if needed. `public/chat.js` is the chat UI; the conversation lives only in the browser tab.
 - `public/budget.js` holds the weekly budget math (including the 25% of workout burn added back), shared by the app and the MCP tools.
 
 ## Deploy
@@ -43,6 +45,7 @@ Your resting burn is estimated with the Mifflin–St Jeor equation, then multipl
    - `MEAL_API_TOKEN`: a long random string, e.g. `openssl rand -hex 32`, for writing to the API directly.
    - `SITE_PASSCODE`: a short code you'll type once per device to save your goals.
    - `MCP_AUTH_TOKEN`: another long random string. The MCP endpoint refuses every request until it's set.
+   - `ANTHROPIC_API_KEY`: an API key from https://console.anthropic.com, for Ask Claude. API usage is billed by Anthropic separately from a Claude subscription. Without it, everything else works and Ask Claude says it isn't set up.
    - `TIMEZONE`: your IANA time zone, e.g. `America/Chicago`. Netlify runs in UTC, so without this Claude's "today" rolls over at the wrong time.
 3. In Claude, add a custom connector with the URL `https://<your-site>.netlify.app/mcp/<MCP_AUTH_TOKEN>`. Clients that can send headers can instead use `/mcp` with `Authorization: Bearer <MCP_AUTH_TOKEN>`.
 
