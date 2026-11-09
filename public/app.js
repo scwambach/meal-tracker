@@ -734,31 +734,88 @@ window.addEventListener("resize", () => {
 });
 
 // ---- History ----
+// Weeks the user has expanded or collapsed this session, by week start; unset weeks fall back to
+// "only the current week is open".
+const weekOpen = new Map();
+
+function weekLabel(start) {
+  const thisWeek = weekDays(today())[0];
+  if (start === thisWeek) return "This week";
+  if (start === shiftDay(thisWeek, -7)) return "Last week";
+  const a = parseDay(start);
+  const b = parseDay(shiftDay(start, 6));
+  const yr = a.getFullYear() !== new Date().getFullYear() || b.getFullYear() !== a.getFullYear();
+  const first = a.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(yr && { year: "numeric" }) });
+  const last = b.toLocaleDateString(undefined, {
+    ...(b.getMonth() !== a.getMonth() && { month: "short" }),
+    day: "numeric",
+    ...(yr && { year: "numeric" }),
+  });
+  return `${first} – ${last}`;
+}
+
+function historyRow(date, list, total, scale) {
+  const emojis = [...new Set(list.map((m) => typeOf(m).emoji))].join("");
+  const over = targets && total > targets.daily_calories;
+  const diff = targets ? targets.daily_calories - total : null;
+  return `<button class="day-row" data-go="${date}">
+    <div class="when"><b>${esc(dayLabel(date))}</b><span class="emojis">${emojis}</span></div>
+    <div class="right">
+      <div class="meal-kcal num">${n(total)}<small>kcal</small></div>
+      ${diff !== null ? `<div class="diff ${over ? "over" : ""}">${over ? `${n(-diff)} over` : `${n(diff)} under`}</div>` : ""}
+      <div class="bar ${over ? "over" : ""}"><span style="width:${(total / scale) * 100}%"></span></div>
+    </div>
+  </button>`;
+}
+
 function historyView() {
-  const days = [...byDay()].sort(([a], [b]) => b.localeCompare(a));
-  const totals = days.map(([, list]) => sumTotals(list).calories);
-  const scale = targets ? Math.max(targets.daily_calories, ...totals) : Math.max(1, ...totals);
+  const dayMap = byDay();
+  const days = [...dayMap].sort(([a], [b]) => b.localeCompare(a));
+  const totals = new Map(days.map(([d, list]) => [d, sumTotals(list).calories]));
+  const scale = targets ? Math.max(targets.daily_calories, ...totals.values()) : Math.max(1, ...totals.values());
+
+  // Group logged days by the week they fall in (honouring the profile's week start), newest first.
+  const weeks = new Map();
+  for (const [date, list] of days) {
+    const start = weekDays(date)[0];
+    if (!weeks.has(start)) weeks.set(start, []);
+    weeks.get(start).push([date, list]);
+  }
+  const thisWeek = weekDays(today())[0];
+
   app.innerHTML = `
     <header class="topbar"><h1>History</h1></header>
     ${
       days.length
-        ? `<div class="days">${days
-            .map(([date, list], i) => {
-              const emojis = [...new Set(list.map((m) => typeOf(m).emoji))].join("");
-              const over = targets && totals[i] > targets.daily_calories;
-              const diff = targets ? targets.daily_calories - totals[i] : null;
-              return `<button class="day-row" data-go="${date}">
-                <div class="when"><b>${esc(dayLabel(date))}</b><span class="emojis">${emojis}</span></div>
-                <div class="right">
-                  <div class="meal-kcal num">${n(totals[i])}<small>kcal</small></div>
-                  ${diff !== null ? `<div class="diff ${over ? "over" : ""}">${over ? `${n(-diff)} over` : `${n(diff)} under`}</div>` : ""}
-                  <div class="bar ${over ? "over" : ""}"><span style="width:${(totals[i] / scale) * 100}%"></span></div>
-                </div>
-              </button>`;
+        ? `<div class="weeks">${[...weeks]
+            .map(([start, wdays]) => {
+              const wk = weekStats(shiftDay(start, 6), dayMap); // last day, so all of the week's workouts count
+              const over = targets && wk.total > wk.goal;
+              const diff = wk.goal - wk.total;
+              const open = weekOpen.get(start) ?? start === thisWeek;
+              return `<details class="week-group" data-week="${start}" ${open ? "open" : ""}>
+                <summary class="week-row">
+                  <span class="chev">${icon("right")}</span>
+                  <div class="when"><b>${esc(weekLabel(start))}</b>
+                    <span class="sub">${wdays.length} day${wdays.length === 1 ? "" : "s"} logged${
+                      wk.earned ? ` · +${n(wk.earned)} from workouts` : ""
+                    }</span></div>
+                  <div class="right">
+                    <div class="meal-kcal num">${n(wk.total)}<small>kcal</small></div>
+                    ${targets ? `<div class="diff ${over ? "over" : ""}">${over ? `${n(-diff)} over` : `${n(diff)} under`} of ${n(wk.goal)}</div>` : ""}
+                    ${targets ? `<div class="bar ${over ? "over" : ""}"><span style="width:${Math.min(1, wk.total / Math.max(1, wk.goal)) * 100}%"></span></div>` : ""}
+                  </div>
+                </summary>
+                <div class="days">${wdays.map(([date, list]) => historyRow(date, list, totals.get(date), scale)).join("")}</div>
+              </details>`;
             })
             .join("")}</div>`
         : emptyState("🗓️", "No meals logged yet.")
     }`;
+
+  app.querySelectorAll(".week-group").forEach((el) =>
+    el.addEventListener("toggle", () => weekOpen.set(el.dataset.week, el.open)),
+  );
 }
 
 // ---- Goals ----
@@ -1102,5 +1159,6 @@ document.querySelectorAll(".tab").forEach((tab) => {
   const [ic, label] = TABS[tab.dataset.tab];
   tab.innerHTML = `${icon(ic)}${label}`;
 });
-initChat({ authedFetch, toast, onChanged: () => load(), icon, esc });
+// Ask Claude is switched off for now; uncomment to bring the button back.
+// initChat({ authedFetch, toast, onChanged: () => load(), icon, esc });
 load();
